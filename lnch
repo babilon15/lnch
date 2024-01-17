@@ -1,0 +1,263 @@
+#!/usr/bin/python3
+
+from os import get_terminal_size, getcwd
+from subprocess import Popen, DEVNULL
+from argparse import ArgumentParser
+from operator import itemgetter
+from getpass import getuser
+from shlex import split
+import os.path
+import curses
+import json
+
+# Constants:
+MARGIN_TOP = 0
+MARGIN_BOTTOM = 0
+CWD = getcwd()
+USER = getuser()
+HOME = os.path.expanduser("~")
+MENUITEMS_JSON_FILE = os.path.join(HOME, ".config", "lnch_menu.json")
+MENUITEMS_DEFAULT = [{"name": "Kitty", "command": "/usr/bin/kitty", "count": 0}, {"name": "Kodi", "command": "/usr/bin/kodi -fs --windowing=wayland", "count": 0}, {"name": "imv (current dir)", "command": "/usr/bin/imv-wayland {CWD}", "count": 0}]
+
+try:
+    COLS, _ = get_terminal_size()
+except OSError:
+    print("Unable to get terminal size.")
+    exit(1)
+
+
+def odd(num):
+    return bool(num % 2)
+
+
+def repeat_str(string, num, between=""):
+    return between.join([string for x in range(num)])
+
+
+def center(string, length, bigger_first=False, ext_ch=" ", b_skip=True):
+    str_len = len(string)
+    rema = length - str_len
+    if rema <= 0:
+        return string
+    rema_half = rema // 2
+    a, b = rema_half, rema_half
+    if odd(length):
+        if bigger_first:
+            a += 1
+        else:
+            b += 1
+    return "".join((repeat_str(ext_ch, a), string, repeat_str(ext_ch, b) if not b_skip else ""))
+
+
+def exe_noblock(command):
+    cmd = split(command)
+    p = Popen(cmd, stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL, start_new_session=True)
+    return p.pid
+
+
+def show_colors(cols=80, max_color_num=256):
+    block_len = 8
+    block_per_line = cols//block_len
+    out, i, block_c = [], 0, 1
+    while i < max_color_num:
+        i_str = str(i)
+        out.extend((repeat_str(" ", (block_len//2)-len(i_str)), i_str, "\033[48;5;", i_str, "m", repeat_str(" ", block_len//2), "\033[49m"))
+        if block_c == block_per_line:
+            block_c = 0
+            if i != (max_color_num-1):
+                out.extend(("\n"))
+        i += 1
+        block_c += 1
+    print("".join(out))
+
+
+class MenuItems:
+    changed = False
+    reverse_order = False
+
+    def __init__(self, path):
+        self.path = path
+
+        if os.path.exists(path):
+            with open(path) as fo:
+                self.data = json.load(fo)
+        else:
+            self.data = MENUITEMS_DEFAULT
+            self.changed = True
+
+        self.valid = self.valid()
+        if not self.valid:
+            return
+
+        self.items_num = len(self.data)
+        self.mid = self.items_num//2
+        self.longest_name = len(max([items.get("name", "")for items in self.data], key=len))
+
+    def save(self):
+        if self.changed:
+            with open(self.path, "w") as fo:
+                json.dump(self.data, fo, indent=4)
+
+    def sort_by_name(self):
+        self.data.sort(key=lambda d: d["name"].lower(), reverse=self.reverse_order)
+
+    def sort_by_count(self):
+        self.data.sort(key=itemgetter("count"), reverse=not self.reverse_order)
+
+    def increase_c(self, index):
+        try:
+            self.data[index]["count"] += 1
+            self.changed = True
+        except IndexError:
+            pass
+        except KeyError:
+            pass
+
+    def valid(self):
+        if type(self.data) != list:
+            return False
+        if len(self.data) == 0:
+            return False
+        for item in self.data:
+            if type(item) != dict:
+                return False
+            if "name" not in item or "command" not in item or "count" not in item:
+                return False
+            if type(item["name"]) != str or type(item["command"]) != str:
+                return False
+            if len(item["name"]) < 3 or len(item["command"]) < 5:
+                return False
+            if type(item["count"]) != int:
+                return False
+        return True
+
+
+class PIDs:
+    comp = []
+
+    def set(self, pid, name, command=""):
+        self.comp.append({"pid": pid, "name": name, "command": command})
+
+    def show(self): pass
+
+
+def menu(scr):
+    curses.curs_set(0)
+    curses.noecho()
+
+    curses.start_color()
+    curses.use_default_colors()
+    text_color = curses.COLOR_WHITE
+    if args.black_text_color:
+        text_color = curses.COLOR_BLACK
+    if args.primary_color >= 0 and args.primary_color < curses.COLORS:
+        curses.init_pair(1, text_color, args.primary_color)
+    else:
+        curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_WHITE)
+
+    current_index = 0
+    match args.list_start:
+        case "first":
+            pass
+        case "middle":
+            current_index = menu_items.mid
+        case "last":
+            current_index = menu_items.items_num-1
+
+    while 1:
+        scr.erase()
+
+        current_item = menu_items.data[current_index]
+        name_len = len(current_item["name"])
+        name_out = "".join((" ", current_item["name"], repeat_str(" ", (menu_items.longest_name-name_len)+1)))
+        name_out_len = len(name_out)
+
+        y_c, x_c = curses.LINES//2, (curses.COLS//2)-(name_out_len//2)
+
+        # HIGHLIGHTER:
+        scr.addstr(y_c, x_c, name_out, curses.color_pair(1) | curses.A_BOLD)
+        # Top:
+        line_negative_c = y_c-1
+        top_slice = menu_items.data[:current_index]
+        top_slice.reverse()
+        for top_current_item in top_slice:
+            top_name_len = len(top_current_item["name"])
+            top_name_out = "".join((" ", top_current_item["name"], repeat_str(" ", (menu_items.longest_name-top_name_len)+1)))
+            scr.addstr(line_negative_c, x_c, top_name_out)
+            line_negative_c -= 1
+            if line_negative_c == (-1+MARGIN_TOP):
+                break
+        # Bottom:
+        line_positive_c = y_c+1
+        for bottom_current_item in menu_items.data[current_index+1:]:
+            bottom_name_len = len(bottom_current_item["name"])
+            bottom_name_out = "".join((" ", bottom_current_item["name"], repeat_str(" ", (menu_items.longest_name-bottom_name_len)+1)))
+            scr.addstr(line_positive_c, x_c, bottom_name_out)
+            line_positive_c += 1
+            if line_positive_c == (curses.LINES-MARGIN_BOTTOM):
+                break
+
+        scr.refresh()
+
+        press = scr.getch()
+        # RESIZE:
+        if press == curses.KEY_RESIZE:
+            curses.update_lines_cols()
+        # EXIT:
+        if press in (ord('q'), ord('Q'), ord('x'), ord('X'), curses.KEY_F10):
+            return
+        # SELECT:
+        if press in (ord('\n'),):
+            pid = exe_noblock(current_item["command"].format(CWD=CWD, HOME=HOME, USR=USER))
+            pids.set(current_item["name"], pid)
+            menu_items.increase_c(current_index)
+            if not args.a:
+                return
+        # NAV:
+        if press in (curses.KEY_UP, curses.KEY_LEFT):
+            current_index = max(0, current_index-1)
+        if press in (curses.KEY_DOWN, curses.KEY_RIGHT):
+            current_index = min(menu_items.items_num-1, current_index+1)
+
+
+if __name__ == "__main__":
+    arg_p = ArgumentParser(allow_abbrev=False)
+    arg_p.add_argument("-a", action="store_true", help="disable auto exit")
+    arg_p.add_argument("-b", "--black-text-color", action="store_true")
+    arg_p.add_argument("-c", "--primary-color", type=int, help="0 - 255", metavar="<color_num>", default=25)
+    arg_p.add_argument("-l", "--list-start", type=str, metavar="<first|middle|last>", default="first")
+    arg_p.add_argument("-p", "--print-pid", action="store_true")
+    arg_p.add_argument("-r", "--reverse-order", action="store_true")
+    arg_p.add_argument("-s", "--sort-by", type=str, metavar="<regular|frequent>", default="regular")
+    arg_p.add_argument("--show-colors", action="store_true")
+    args = arg_p.parse_args()
+
+    if args.show_colors:
+        print(center("Colors:", COLS))
+        show_colors(COLS)
+        print()
+        exit(0)
+
+    menu_items = MenuItems(MENUITEMS_JSON_FILE)
+    if not menu_items.valid:
+        print("Not valid:", MENUITEMS_JSON_FILE)
+        exit(1)
+
+    menu_items.reverse_order = args.reverse_order
+    match args.sort_by:
+        case "regular":
+            menu_items.sort_by_name()
+        case "frequent":
+            menu_items.sort_by_count()
+
+    pids = PIDs()
+
+    try:
+        curses.wrapper(menu)
+    except KeyboardInterrupt:
+        pass
+
+    if args.print_pid:
+        pids.show()
+
+    menu_items.save()

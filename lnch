@@ -101,8 +101,6 @@ class MenuItems:
             self.changed = True
         except IndexError:
             pass
-        except KeyError:
-            pass
 
     def is_valid(self):
         if not isinstance(self.data, list):
@@ -138,7 +136,7 @@ class PIDs:
         for item in self.comp:
             out.extend((repeat_str(
                 " ", longest_pid-len(item["pid"])), item["pid"], ":  ", item["name"], "\n"))
-        print("".join(out))
+        print("".join(out), end="")
 
 
 def menu(scr):
@@ -176,7 +174,11 @@ def menu(scr):
         y_c, x_c = curses.LINES//2, (curses.COLS//2)-(name_out_len//2)
 
         # HIGHLIGHTER:
-        scr.addstr(y_c, x_c, name_out, curses.color_pair(1) | curses.A_BOLD)
+        try:
+            scr.addstr(y_c, x_c, name_out,
+                       curses.color_pair(1) | curses.A_BOLD)
+        except curses.error:
+            pass
         # Top:
         line_negative_c = y_c-1
         top_slice = menu_items.data[:current_index]
@@ -185,7 +187,10 @@ def menu(scr):
             top_name_len = len(top_current_item["name"])
             top_name_out = "".join((" ", top_current_item["name"], repeat_str(
                 " ", (menu_items.longest_name-top_name_len)+1)))
-            scr.addstr(line_negative_c, x_c, top_name_out)
+            try:
+                scr.addstr(line_negative_c, x_c, top_name_out)
+            except curses.error:
+                pass
             line_negative_c -= 1
             if line_negative_c == (-1+MARGIN_TOP):
                 break
@@ -195,7 +200,10 @@ def menu(scr):
             bottom_name_len = len(bottom_current_item["name"])
             bottom_name_out = "".join((" ", bottom_current_item["name"], repeat_str(
                 " ", (menu_items.longest_name-bottom_name_len)+1)))
-            scr.addstr(line_positive_c, x_c, bottom_name_out)
+            try:
+                scr.addstr(line_positive_c, x_c, bottom_name_out)
+            except curses.error:
+                pass
             line_positive_c += 1
             if line_positive_c == (curses.LINES-MARGIN_BOTTOM):
                 break
@@ -210,7 +218,7 @@ def menu(scr):
         if press in (ord('q'), ord('Q'), ord('x'), ord('X'), curses.KEY_F10):
             return
         # SELECT:
-        if press in (ord('\n'),):
+        if press in (ord('\n'), curses.KEY_ENTER):
             pid = exe_noblock(current_item["command"].format(
                 CWD=CWD, HOME=HOME, USR=USER))
             pids.set(pid, current_item["name"])
@@ -219,9 +227,13 @@ def menu(scr):
                 return
         # NAV:
         if press in (curses.KEY_UP, curses.KEY_LEFT):
-            current_index = max(0, current_index-1)
+            current_index = current_index-1
+            if current_index < 0:
+                current_index = menu_items.items_num-1
         if press in (curses.KEY_DOWN, curses.KEY_RIGHT):
-            current_index = min(menu_items.items_num-1, current_index+1)
+            current_index = current_index+1
+            if current_index > (menu_items.items_num-1):
+                current_index = 0
 
 
 if __name__ == "__main__":

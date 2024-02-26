@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+from subprocess import Popen, DEVNULL
 from socket import gethostname
 from getpass import getuser
 from shlex import split
@@ -15,3 +16,13 @@ HOST = gethostname()
 
 def cmd_coll(cmd):
     return cmd.format(CWD=CWD, USR=USER, HOME=HOME, HOSTN=HOST)
+
+
+def exec_nonblocking(cmd):
+    p = Popen(split(cmd), stdin=DEVNULL, stdout=DEVNULL,
+              stderr=DEVNULL, start_new_session=True)
+    return p.pid
+
+
+def repeat_str(string, num, between=""):
+    return between.join([string for x in range(num)])

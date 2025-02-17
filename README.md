@@ -4,9 +4,9 @@
 ![screenshot](https://raw.githubusercontent.com/babilon15/lnch/rv2/screenshot.png)
 
 ### (Arch) dependencies:
-- python-validators
-- python-natsort
-- python-pyxdg
+- [python-validators](https://github.com/python-validators/validators)
+- [python-natsort](https://github.com/SethMMorton/natsort)
+- [python-pyxdg](https://freedesktop.org/wiki/Software/pyxdg)
 
 ### Environment variables:
 | name           | default value |
@@ -16,5 +16,7 @@
 
 ### Usage:
 `lnch`
+
 `lnch .`
+
 `lnch screenshot.png`

@@ -12,4 +12,9 @@
 | name           | default value |
 | -------------- | ------------- |
 | LNCH_APPS_DIRS | *empty*       |
-| LNCH_TERM_CMD  | 'foot'        |
+| LNCH_TERM_CMD  | "foot"        |
+
+### Usage:
+`lnch`
+`lnch .`
+`lnch screenshot.png`

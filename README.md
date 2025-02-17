@@ -7,3 +7,9 @@
 - python-validators
 - python-natsort
 - python-pyxdg
+
+### Environment variables:
+| name           | default value |
+| -------------- | ------------- |
+| LNCH_APPS_DIRS | *empty*       |
+| LNCH_TERM_CMD  | 'foot'        |

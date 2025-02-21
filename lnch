@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/python
 
 from signal import signal, SIGCHLD, SIG_IGN
 from subprocess import Popen, DEVNULL

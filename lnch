@@ -158,8 +158,8 @@ class Interface:
     UNUSED_LINES = 3
     LIST_START = 1
 
-    def __init__(self, dirs, paths, urls, term_cmd):
-        self.paths, self.urls, self.term_cmd = paths, urls, term_cmd
+    def __init__(self, dirs, paths, urls, term_cmd, auto_exit=True):
+        self.paths, self.urls, self.term_cmd, self.auto_exit = paths, urls, term_cmd, auto_exit
 
         self.entries = RelevantEntries(dirs)
         self.entries.update()
@@ -278,9 +278,11 @@ class Interface:
             self.input_up()
         elif ch in (curses.KEY_ENTER, ord("\n"), curses.KEY_RIGHT):
             exec_nonblocking(self.edit_current_cmd())
-            return True
+            if self.auto_exit:
+                return True
         else:
             return True
+
         return False
 
     def edit_current_cmd(self):
@@ -312,14 +314,20 @@ class Interface:
             curses.endwin()
 
 
+TRUE_VALUES = ("TRUE", "T", "YES", "Y", "1")
+
 ENV_USR_APPS_DIRS = os.getenv("LNCH_APPS_DIRS", "")
 ENV_TERM_CMD = os.getenv("LNCH_TERM_CMD", "foot")
+ENV_AUTO_EXIT = os.getenv("LNCH_AUTO_EXIT", "true")
+
+PRESET_AUTO_EXIT = ENV_AUTO_EXIT.strip().upper() in TRUE_VALUES
 
 if __name__ == "__main__":
     signal(SIGCHLD, SIG_IGN)  # Prevents the formation of zombie processes.
 
     paths, urls = [], []
     for u in sys.argv[1:]:
+        u = u.strip()
         if is_url(u):
             urls.append(u)
         else:
@@ -327,8 +335,12 @@ if __name__ == "__main__":
 
     usr_apps_dirs = []
     for d in ENV_USR_APPS_DIRS.split(":"):
+        d = d.strip()
         if os.path.isdir(d):
             usr_apps_dirs.append(d)
 
-    app = Interface(usr_apps_dirs if usr_apps_dirs else APPS_DIRS, paths, urls, ENV_TERM_CMD)
+    app = Interface(
+        usr_apps_dirs if usr_apps_dirs else APPS_DIRS, paths, urls, ENV_TERM_CMD, PRESET_AUTO_EXIT
+    )
+
     app.run()

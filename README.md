@@ -30,6 +30,8 @@ lnch "https://www.google.com"
 ### On Hyprland:
 - `~/.config/hypr/hyprland.conf`
 
+for example:
+
 ```
 bind = SUPER, L, exec, foot --title=lnch ~/.local/bin/lnch
 windowrulev2 = float, title:^(lnch)
